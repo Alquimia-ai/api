@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from routers import context
 
 app = FastAPI()
 
@@ -14,6 +15,8 @@ if __name__ == "__main__":
         reload=True,
     )
 
+
+app.include_router(context.router,prefix="/context",tags=["context"])
 
 @app.get("/")
 async def root():
