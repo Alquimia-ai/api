@@ -1,6 +1,5 @@
 from fastapi import APIRouter,File,UploadFile
 from fastapi.responses import JSONResponse
-from typing import List
 import tempfile
 from PyPDF2 import PdfReader
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -9,12 +8,9 @@ from langchain.vectorstores import  Qdrant
 import qdrant_client
 from langchain.chains.question_answering import load_qa_chain
 from langchain.llms import OpenAI
-from langchain.chains import (LLMChain,ConversationalRetrievalChain)
-from langchain.memory import ConversationBufferMemory
-from langchain.callbacks.base import BaseCallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.chains import (ConversationalRetrievalChain)
 from langchain.memory import RedisChatMessageHistory
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate,ChatPromptTemplate
 from pydantic import BaseModel
 import os
 router = APIRouter()
@@ -92,52 +88,33 @@ def chat(body:Chat) -> ChatResponse:
         collection_name= "JL" if body.collection_name is None else body.collection_name,
         embeddings=embeddings,
     )
-    docs=doc_store.similarity_search(body.question,4)
-    context_docs = ""
-    for doc in docs:
-        context_docs = context_docs + doc.page_content + " \n\n "
-        
-    template = """ your template
-    Context:\"""
-    
-    {context}
-    \"""
-    Question:\"
-    \"""
-    
-    Helpful Answer:"""
-    prompt= PromptTemplate.from_template(template)
-    streaming_llm = OpenAI(
-    streaming=True,
-    openai_api_key=OPENAI_API_KEY,
-    callback_manager=BaseCallbackManager([
-        StreamingStdOutCallbackHandler()
-    ]),
-    verbose=True,
-    max_tokens=150,
-    temperature=0.2
-    )
-    # use the streaming LLM to create a question answering chain
-    doc_chain = load_qa_chain(
-        llm=streaming_llm,
-        chain_type="stuff",
-        prompt=prompt
-    )
-    question_generator=LLMChain(
-        llm=streaming_llm,
-        prompt=prompt
-    )
-    
-    chatbot = ConversationalRetrievalChain(
-        retriever=doc_store.as_retriever(),
-        combine_docs_chain=doc_chain,
-        question_generator=question_generator,
-    )
 
-    response = chatbot(
-        {"question": body.question, "chat_history": message_history.messages}
-    )
-    message_history.add_user_message(response["question"])
-    message_history.add_ai_message(response["answer"])
-    return ChatResponse(response=response["answer"], status_code=200)
+
+    qa=ConversationalRetrievalChain.from_llm(
+        OpenAI(temperature=0),
+        doc_store.as_retriever()
+        )
+
+    result=qa({"question":body.question,"chat_history":message_history.messages,})
+
+    message_history.add_user_message(result["question"])
+    message_history.add_ai_message(result["answer"])
+    return ChatResponse(response=result["answer"], status_code=200)
+
+
+@router.get('/session/{session_id}')
+async def get_session(session_id):
+    message_history = RedisChatMessageHistory(session_id=session_id)
+    formatted_data = []
+    # Iterate through the input data and create question-answer pairs
+    for i in range(0, len(message_history.messages), 2):
+        question = message_history.messages[i].content
+        answer = message_history.messages[i + 1].content
+        formatted_data.append({"question": question, "answer": answer})
+
+    # Now, 'formatted_data' contains the question-answer pairs
+    return {
+        "session_id":session_id,
+        "messages":formatted_data
+    }
 
