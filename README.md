@@ -48,10 +48,10 @@ services:
     ports:
       - '6379:6379'
     command: redis-server --bind 0.0.0.0
-  fastapi-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  api:
+    image: alexfiorenza/alquimia-api:1.0
+    depends_on:
+      - redis
     ports:
       - '80:80'
     environment:
