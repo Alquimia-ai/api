@@ -5,3 +5,14 @@ services:
     ports:
       - '6379:6379'
     command: redis-server --bind 0.0.0.0
+  fastapi_app:
+    image: alexfiorenza/alquimia-api:1.0
+    depends_on:
+      - redis
+    ports:
+      - '80:80'
+    environment:
+      - QDRANT_API_KEY=<qdrant-api-key>
+      - OPENAI_API_KEY=<openai_api_key>
+      - QDRANT_URL=<qdrant_url>
+      - REDIS_URL=redis://redis:6379/0

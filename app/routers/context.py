@@ -19,6 +19,8 @@ router = APIRouter()
 
 QDRANT_API_KEY=os.environ.get("QDRANT_API_KEY")
 OPENAI_API_KEY=os.environ.get("OPENAI_API_KEY")
+QDRANT_URL=os.environ.get("QDRANT_URL")
+REDIS_URL=os.environ.get("REDIS_URL")  
 
 if(QDRANT_API_KEY is None or OPENAI_API_KEY is None):
     raise Exception("Please set QDRANT_API_KEY and OPENAI_API_KEY environment variables")
@@ -56,7 +58,7 @@ async def upload_file(file:UploadFile):
     Qdrant.from_texts(
     texts=texts,
     embedding=embeddings,
-    url="https://15fd304c-3b57-4c69-820e-c7d100b2cdef.eu-central-1-0.aws.cloud.qdrant.io:6333",
+    url=QDRANT_URL,
     prefer_grpc=True,
     api_key=os.environ.get("QDRANT_API_KEY"),
     collection_name="JL",
@@ -77,10 +79,10 @@ class ChatResponse(BaseModel):
 @router.post("/chat")
 def chat(body:Chat) -> ChatResponse:
     # Download embeddings from OpenAI
-    message_history = RedisChatMessageHistory(body.question if body.session_id is None else body.session_id)
+    message_history = RedisChatMessageHistory(body.question if body.session_id is None else body.session_id,url="redis://localhost:6379/0" if REDIS_URL is None else REDIS_URL)
     embeddings = OpenAIEmbeddings(client=OPENAI_API_KEY)
     client=qdrant_client.QdrantClient(
-        "https://15fd304c-3b57-4c69-820e-c7d100b2cdef.eu-central-1-0.aws.cloud.qdrant.io:6333",
+        QDRANT_URL,
         api_key=os.environ.get("QDRANT_API_KEY")
     )
     doc_store=Qdrant(
